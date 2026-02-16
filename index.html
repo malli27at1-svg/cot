@@ -1,0 +1,2237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bloomberg Commodity Index - CFTC COT Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            padding: 40px 20px;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        label {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        select, button {
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        select:focus, button:focus {
+            outline: none;
+            border-color: #2a5298;
+        }
+        
+        button {
+            background: #2a5298;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 20px;
+        }
+        
+        button:hover {
+            background: #1e3c72;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .chart-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 15px;
+        }
+        
+        .chart-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .chart-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-left: 5px solid #2a5298;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-label {
+            font-size: 0.85em;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .stat-sub {
+            font-size: 0.85em;
+            color: #95a5a6;
+            margin-top: 5px;
+        }
+        
+        .positive { color: #27ae60; }
+        .negative { color: #e74c3c; }
+        .neutral { color: #f39c12; }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 1.2em;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.9em;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .warning {
+            background: #f39c12;
+            color: #2c3e50;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: none;
+        }
+        
+        .debug-panel {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .info-box {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 4px solid rgba(255,255,255,0.5);
+        }
+        
+        .legend-custom {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        
+        /* Summary Table Styles */
+        .summary-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .summary-title {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .summary-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+        
+        .summary-table th {
+            background: #2a5298;
+            color: white;
+            padding: 10px 8px;
+            text-align: center;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            font-size: 0.9em;
+        }
+        
+        .summary-table td {
+            padding: 8px;
+            border-bottom: 1px solid #ecf0f1;
+            text-align: center;
+        }
+        
+        .summary-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .summary-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .summary-table tr:nth-child(even):hover {
+            background: #e9ecef;
+        }
+        
+        .commodity-name {
+            text-align: left !important;
+            font-weight: 600;
+        }
+        
+        .trend-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.8em;
+        }
+        
+        .trend-up {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .trend-down {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .trend-neutral {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .extreme-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7em;
+            font-weight: 700;
+        }
+        
+        .extreme-max {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .extreme-min {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .extreme-normal {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+        
+        .section-header {
+            background: #34495e !important;
+            color: white !important;
+            font-weight: 700;
+            text-align: left !important;
+            padding: 10px !important;
+        }
+        
+        .data-cell {
+            font-family: 'Courier New', monospace;
+        }
+        
+        .positive-value {
+            color: #27ae60;
+            font-weight: 600;
+        }
+        
+        .negative-value {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+        
+        .table-container {
+            max-height: 800px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .stats-legend {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 0.85em;
+        }
+        
+        /* Range bar styles */
+        .range-bar-container {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            position: relative;
+            margin: 5px 0;
+            overflow: hidden;
+        }
+        
+        .range-bar {
+            position: absolute;
+            height: 100%;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .range-bar-net-long {
+            background: linear-gradient(90deg, #27ae60, #2ecc71);
+        }
+        
+        .range-bar-net-short {
+            background: linear-gradient(90deg, #e74c3c, #c0392b);
+        }
+        
+        .range-marker {
+            position: absolute;
+            width: 4px;
+            height: 100%;
+            background: #2c3e50;
+            border: 2px solid white;
+            border-radius: 2px;
+            transform: translateX(-50%);
+            z-index: 10;
+            box-shadow: 0 0 4px rgba(0,0,0,0.3);
+        }
+        
+        .range-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7em;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        
+        /* Seasonality chart styles - SINGLE CHART */
+        .seasonality-container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8em; }
+            .controls { flex-direction: column; }
+            .chart-header { flex-direction: column; align-items: flex-start; }
+            .chart-controls { width: 100%; }
+            .chart-container { height: 300px; }
+            .summary-table { font-size: 0.75em; }
+            .summary-table th, .summary-table td { padding: 6px 4px; }
+        }
+    </style>
+<base target="_blank">
+<base target="_blank">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Bloomberg Commodity Index COT Analyzer</h1>
+            <div class="subtitle">CFTC Commitment of Traders - BCOM Constituents Only</div>
+            <div class="info-box">
+                <strong>Data Source:</strong> U.S. Commodity Futures Trading Commission (CFTC) Disaggregated Reports<br>
+                <strong>Index:</strong> Bloomberg Commodity Index (BCOM) 2026 Target Weights<br>
+                <strong>Coverage:</strong> 23 commodities across Energy, Grains, Industrial Metals, Precious Metals, Softs, Livestock<br>
+                <strong>Update Frequency:</strong> Weekly (Every Friday at 3:30 PM ET)
+            </div>
+        </header>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="commoditySelect">Select Commodity (BCOM Only)</label>
+                <select id="commoditySelect">
+                    <option value="">-- Select a Commodity --</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="traderCategory">Trader Category</label>
+                <select id="traderCategory">
+                    <option value="managed_money" selected>Managed Money</option>
+                    <option value="swap_dealers">Swap Dealers</option>
+                    <option value="prod_merc">Producer/Merchant/Processor/User</option>
+                    <option value="other_rept">Other Reportables</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="reportType">Report Type</label>
+                <select id="reportType">
+                    <option value="futures">Futures Only (72hh-3qpy)</option>
+                    <option value="combined" selected>Futures & Options Combined (kh3c-gbw2)</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="yearsSelect">Chart Time Range</label>
+                <select id="yearsSelect">
+                    <option value="15" selected>Last 15 Years</option>
+                    <option value="10">Last 10 Years</option>
+                    <option value="5">Last 5 Years</option>
+                    <option value="3">Last 3 Years</option>
+                    <option value="1">Last 1 Year</option>
+                    <option value="all">All Available (Since 2006)</option>
+                </select>
+            </div>
+            
+            <button id="fetchBtn" onclick="fetchData()">📈 Generate Charts</button>
+            <button id="summaryBtn" onclick="generateSummary()" style="background:#27ae60; margin-left:10px;">📋 Market Summary</button>
+            <button id="debugBtn" onclick="toggleDebug()" style="background:#e67e22; margin-left:10px;">🔍 Debug</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div id="loadingText">Fetching CFTC data...</div>
+        </div>
+
+        <div class="error" id="error"></div>
+        <div class="warning" id="warning"></div>
+        
+        <div class="debug-panel" id="debugPanel">
+            <h3>API Response Debugger</h3>
+            <div id="debugContent"></div>
+        </div>
+
+        <!-- Market Summary Section -->
+        <div class="summary-section" id="summarySection" style="display:none;">
+            <div class="summary-header">
+                <div class="summary-title">📋 BCOM Weekly Market Summary - All Trader Categories (Historical Context Since 2006)</div>
+                <div class="summary-controls">
+                    <button onclick="refreshSummary()" style="margin-top:0; padding:8px 15px; font-size:0.9em;">🔄 Refresh All</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="summary-table" id="summaryTable">
+                    <thead>
+                        <tr>
+                            <th rowspan="2">Commodity</th>
+                            <th rowspan="2">Trader Category</th>
+                            <th colspan="4">Net Position (Contracts)</th>
+                            <th colspan="3">Long Position (Contracts)</th>
+                            <th colspan="3">Short Position (Contracts)</th>
+                            <th colspan="3">Net % of OI</th>
+                            <th rowspan="2">Traders</th>
+                            <th rowspan="2">Pos/Trader</th>
+                        </tr>
+                        <tr>
+                            <th>Current</th>
+                            <th>Hist Max</th>
+                            <th>Hist Min</th>
+                            <th>Change</th>
+                            <th>Current</th>
+                            <th>Hist Max</th>
+                            <th>Hist Min</th>
+                            <th>Current</th>
+                            <th>Hist Max</th>
+                            <th>Hist Min</th>
+                            <th>Current</th>
+                            <th>Hist Max</th>
+                            <th>Hist Min</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaryTableBody">
+                    </tbody>
+                </table>
+            </div>
+            <div class="stats-legend">
+                <strong>Column Definitions:</strong><br>
+                • <strong>Net Position:</strong> Long - Short (green = net long, red = net short)<br>
+                • <strong>Hist Max/Min:</strong> Historical extremes since 2006<br>
+                • <strong>Change:</strong> Week-over-week change (▲ = increasing, ▼ = decreasing)<br>
+                • <strong>Net % of OI:</strong> Net position as percentage of total Open Interest<br>
+                • <strong>Traders:</strong> Number of reporting entities (Long/Short breakdown)<br>
+                • <strong>Pos/Trader:</strong> Average position size per trader (conviction indicator)
+            </div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid" style="display:none;">
+            <div class="stat-card">
+                <div class="stat-label">Current Net Position</div>
+                <div class="stat-value" id="currentNet">--</div>
+                <div class="stat-sub" id="currentNetPct">--</div>
+                <div class="range-bar-container" id="netRangeBar" style="display:none;">
+                    <div class="range-bar range-bar-net-long" style="width: 100%;"></div>
+                    <div class="range-marker" style="left: 50%;"></div>
+                </div>
+                <div class="range-labels" id="netRangeLabels" style="display:none;">
+                    <span id="netMinLabel">Min</span>
+                    <span>Current</span>
+                    <span id="netMaxLabel">Max</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Long Positions</div>
+                <div class="stat-value positive" id="currentLong">--</div>
+                <div class="stat-sub" id="currentLongPct">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Short Positions</div>
+                <div class="stat-value negative" id="currentShort">--</div>
+                <div class="stat-sub" id="currentShortPct">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Number of Traders</div>
+                <div class="stat-value neutral" id="numTraders">--</div>
+                <div class="stat-sub">Long: <span id="tradersLong">--</span> | Short: <span id="tradersShort">--</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Position per Trader (Long)</div>
+                <div class="stat-value" id="posPerTraderLong">--</div>
+                <div class="stat-sub">Gross Long / Long Traders</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Position per Trader (Short)</div>
+                <div class="stat-value" id="posPerTraderShort">--</div>
+                <div class="stat-sub">Gross Short / Short Traders</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Open Interest</div>
+                <div class="stat-value" id="openInterest">--</div>
+                <div class="stat-sub">Total market OI</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Weekly Change</div>
+                <div class="stat-value" id="weeklyChange">--</div>
+                <div class="stat-sub" id="weeklyChangePct">--</div>
+            </div>
+        </div>
+
+        <!-- Chart 1: Positions -->
+        <div class="chart-section" id="chart1" style="display:none;">
+            <div class="chart-header">
+                <div class="chart-title">📊 Position Analysis</div>
+                <div class="chart-controls">
+                    <label>Select Metric:</label>
+                    <select id="positionMetric" onchange="updatePositionChart()">
+                        <option value="net">Net Position (Long - Short)</option>
+                        <option value="long">Long Positions</option>
+                        <option value="short">Short Positions</option>
+                        <option value="spread">Spreading Positions</option>
+                        <option value="net_pct">Net as % of OI</option>
+                        <option value="long_pct">Long as % of OI</option>
+                        <option value="short_pct">Short as % of OI</option>
+                    </select>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="positionChart"></canvas>
+            </div>
+            <div class="legend-custom" id="positionLegend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background:rgba(42, 82, 152, 0.8)"></div>
+                    <span>Position</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background:rgba(231, 76, 60, 0.3)"></div>
+                    <span>Zero Line</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart 2: Trader Counts -->
+        <div class="chart-section" id="chart2" style="display:none;">
+            <div class="chart-header">
+                <div class="chart-title">👥 Trader Count Analysis</div>
+                <div class="chart-controls">
+                    <label>Select Metric:</label>
+                    <select id="traderMetric" onchange="updateTraderChart()">
+                        <option value="total">Total Traders</option>
+                        <option value="long">Long Traders</option>
+                        <option value="short">Short Traders</option>
+                        <option value="both">Long & Short (Combined)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="traderChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Chart 3: Position per Trader -->
+        <div class="chart-section" id="chart3" style="display:none;">
+            <div class="chart-header">
+                <div class="chart-title">⚖️ Position Size Analysis</div>
+                <div class="chart-controls">
+                    <label>Select Metric:</label>
+                    <select id="sizeMetric" onchange="updateSizeChart()">
+                        <option value="per_trader_long">Contracts per Trader (Long)</option>
+                        <option value="per_trader_short">Contracts per Trader (Short)</option>
+                        <option value="long_vs_short">Long vs Short per Trader</option>
+                    </select>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="sizeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Chart 4: Seasonality Analysis - SINGLE CHART WITH ALL YEARS -->
+        <div class="chart-section" id="chart4" style="display:none;">
+            <div class="chart-header">
+                <div class="chart-title">📅 Seasonality Analysis (Monthly Patterns - All Years)</div>
+                <div class="chart-controls">
+                    <label>Select Parameter:</label>
+                    <select id="seasonalityMetric" onchange="updateSeasonalityChart()">
+                        <option value="net">Net Position</option>
+                        <option value="long">Long Positions</option>
+                        <option value="short">Short Positions</option>
+                        <option value="net_pct">Net % of OI</option>
+                        <option value="traders_total">Total Traders</option>
+                        <option value="per_trader_long">Contracts per Trader (Long)</option>
+                        <option value="per_trader_short">Contracts per Trader (Short)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="seasonality-container">
+                <div class="chart-container" style="height: 500px;">
+                    <canvas id="seasonalityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CFTC Socrata API endpoints
+        const ENDPOINTS = {
+            futures: 'https://publicreporting.cftc.gov/resource/72hh-3qpy.json',
+            combined: 'https://publicreporting.cftc.gov/resource/kh3c-gbw2.json'
+        };
+
+        // Bloomberg Commodity Index 2026 Constituents - EXACT CFTC API Names
+        const BCOM_COMMODITIES = {
+            'Energy (29.44%)': [
+                { name: 'Brent Crude Oil', ticker: 'CO', cftc_name: 'BRENT CRUDE OIL LAST DAY - NEW YORK MERCANTILE EXCHANGE' },
+                { name: 'Natural Gas', ticker: 'NG', cftc_name: 'NATURAL GAS - NEW YORK MERCANTILE EXCHANGE' },
+                { name: 'WTI Crude Oil', ticker: 'CL', cftc_name: 'CRUDE OIL, LIGHT SWEET - NEW YORK MERCANTILE EXCHANGE' },
+                { name: 'Low Sulphur Gas Oil', ticker: 'QS', cftc_name: 'GAS OIL LOW SULPHUR - ICE FUTURES EUROPE' },
+                { name: 'ULS Diesel', ticker: 'HO', cftc_name: 'NY HARBOR ULSD - NEW YORK MERCANTILE EXCHANGE' },
+                { name: 'RBOB Gasoline', ticker: 'XB', cftc_name: 'GASOLINE, RBOB - NEW YORK MERCANTILE EXCHANGE' }
+            ],
+            'Grains (21.15%)': [
+                { name: 'Corn', ticker: 'C', cftc_name: 'CORN - CHICAGO BOARD OF TRADE' },
+                { name: 'Soybeans', ticker: 'S', cftc_name: 'SOYBEANS - CHICAGO BOARD OF TRADE' },
+                { name: 'Soybean Meal', ticker: 'SM', cftc_name: 'SOYBEAN MEAL - CHICAGO BOARD OF TRADE' },
+                { name: 'Soybean Oil', ticker: 'BO', cftc_name: 'SOYBEAN OIL - CHICAGO BOARD OF TRADE' },
+                { name: 'Wheat', ticker: 'W', cftc_name: 'WHEAT - CHICAGO BOARD OF TRADE' },
+                { name: 'HRW Wheat', ticker: 'KW', cftc_name: 'WHEAT - KANSAS CITY BOARD OF TRADE' }
+            ],
+            'Industrial Metals (15.76%)': [
+                { name: 'Copper', ticker: 'HG', cftc_name: 'COPPER- #1 - COMMODITY EXCHANGE INC.' },
+                { name: 'Aluminum', ticker: 'LA', cftc_name: 'ALUMINUM - COMMODITY EXCHANGE INC.' },
+                { name: 'Zinc', ticker: 'LX', cftc_name: 'ZINC - COMMODITY EXCHANGE INC.' },
+                { name: 'Nickel', ticker: 'LN', cftc_name: 'NICKEL - COMMODITY EXCHANGE INC.' },
+                { name: 'Lead', ticker: 'LL', cftc_name: 'LEAD - COMMODITY EXCHANGE INC.' }
+            ],
+            'Precious Metals (18.84%)': [
+                { name: 'Gold', ticker: 'GC', cftc_name: 'GOLD - COMMODITY EXCHANGE INC.' },
+                { name: 'Silver', ticker: 'SI', cftc_name: 'SILVER - COMMODITY EXCHANGE INC.' }
+            ],
+            'Softs (9.12%)': [
+                { name: 'Sugar', ticker: 'SB', cftc_name: 'SUGAR NO. 11 - ICE FUTURES U.S.' },
+                { name: 'Coffee', ticker: 'KC', cftc_name: 'COFFEE C - ICE FUTURES U.S.' },
+                { name: 'Cocoa', ticker: 'CC', cftc_name: 'COCOA - ICE FUTURES U.S.' },
+                { name: 'Cotton', ticker: 'CT', cftc_name: 'COTTON NO. 2 - ICE FUTURES U.S.' }
+            ],
+            'Livestock (5.64%)': [
+                { name: 'Live Cattle', ticker: 'LC', cftc_name: 'LIVE CATTLE - CHICAGO MERCANTILE EXCHANGE' },
+                { name: 'Lean Hogs', ticker: 'LH', cftc_name: 'LEAN HOGS - CHICAGO MERCANTILE EXCHANGE' }
+            ]
+        };
+
+        // CORRECTED Field mappings for CFTC Disaggregated reports - matching exact API field names
+        const TRADER_FIELDS = {
+            managed_money: {
+                long: ['m_money_positions_long', 'm_money_positions_long_all', 'managed_money_positions_long'],
+                short: ['m_money_positions_short', 'm_money_positions_short_all', 'managed_money_positions_short'],
+                spread: ['m_money_positions_spread', 'm_money_positions_spread_all', 'managed_money_positions_spread'],
+                // CORRECTED: Using proper field names for trader counts
+                traders_long: ['traders_m_money_long', 'traders_m_money_long_all', 'traders_m_money_long_old'],
+                traders_short: ['traders_m_money_short', 'traders_m_money_short_all', 'traders_m_money_short_old']
+            },
+            swap_dealers: {
+                long: ['swap_positions_long', 'swap_positions_long_all', 'swap_dealer_positions_long'],
+                short: ['swap_positions_short', 'swap_positions_short_all', 'swap_dealer_positions_short'],
+                spread: ['swap_positions_spread', 'swap_positions_spread_all', 'swap_dealer_positions_spread'],
+                // CORRECTED: Using proper field names for trader counts
+                traders_long: ['traders_swap_long', 'traders_swap_long_all', 'traders_swap_long_old'],
+                traders_short: ['traders_swap_short', 'traders_swap_short_all', 'traders_swap_short_old']
+            },
+            prod_merc: {
+                long: ['prod_merc_positions_long', 'prod_merc_positions_long_all', 'producer_merchant_positions_long'],
+                short: ['prod_merc_positions_short', 'prod_merc_positions_short_all', 'producer_merchant_positions_short'],
+                spread: ['prod_merc_positions_spread', 'prod_merc_positions_spread_all'],
+                // CORRECTED: Using proper field names for trader counts
+                traders_long: ['traders_prod_merc_long', 'traders_prod_merc_long_all', 'traders_prod_merc_long_old'],
+                traders_short: ['traders_prod_merc_short', 'traders_prod_merc_short_all', 'traders_prod_merc_short_old']
+            },
+            other_rept: {
+                long: ['other_rept_positions_long', 'other_rept_positions_long_all', 'other_reportables_positions_long'],
+                short: ['other_rept_positions_short', 'other_rept_positions_short_all', 'other_reportables_positions_short'],
+                spread: ['other_rept_positions_spread', 'other_rept_positions_spread_all', 'other_reportables_positions_spread'],
+                // CORRECTED: Using proper field names for trader counts
+                traders_long: ['traders_other_rept_long', 'traders_other_rept_long_all', 'traders_other_rept_long_old'],
+                traders_short: ['traders_other_rept_short', 'traders_other_rept_short_all', 'traders_other_rept_short_old']
+            }
+        };
+
+        let charts = {
+            position: null,
+            trader: null,
+            size: null,
+            seasonality: null
+        };
+        
+        let currentData = null;
+        let availableCommodities = [];
+        let debugInfo = {};
+        let summaryData = [];
+        let historicalExtremes = {};
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadCommodityList();
+        });
+
+        async function loadCommodityList() {
+            try {
+                showLoading(true);
+                document.getElementById('loadingText').textContent = 'Loading BCOM commodities...';
+                
+                const response = await fetchWithTimeout(`${ENDPOINTS.combined}?$limit=5000&$order=report_date_as_yyyy_mm_dd DESC`, 15000);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!Array.isArray(data) || data.length === 0) {
+                    throw new Error('No data received from API');
+                }
+                
+                // Get all available commodities from API
+                const apiCommodities = [...new Set(data.map(d => d.market_and_exchange_names))].filter(c => c).sort();
+                availableCommodities = apiCommodities;
+                
+                // Populate dropdown with BCOM commodities only
+                const select = document.getElementById('commoditySelect');
+                select.innerHTML = '<option value="">-- Select a BCOM Commodity --</option>';
+                
+                // Check which BCOM commodities are available in the API
+                Object.entries(BCOM_COMMODITIES).forEach(([sector, commodities]) => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = sector;
+                    
+                    let hasAvailable = false;
+                    commodities.forEach(comm => {
+                        // Find matching commodity in API (case-insensitive partial match)
+                        const match = apiCommodities.find(c => 
+                            c && (c.toUpperCase() === comm.cftc_name.toUpperCase() || 
+                                  c.toUpperCase().includes(comm.cftc_name.split(' - ')[0].toUpperCase()))
+                        );
+                        
+                        if (match) {
+                            const option = document.createElement('option');
+                            option.value = match;
+                            option.textContent = `${comm.name} (${comm.ticker})`;
+                            option.dataset.ticker = comm.ticker;
+                            option.dataset.sector = sector;
+                            optgroup.appendChild(option);
+                            hasAvailable = true;
+                        }
+                    });
+                    
+                    if (hasAvailable) {
+                        select.appendChild(optgroup);
+                    }
+                });
+                
+                showLoading(false);
+                
+            } catch (error) {
+                showLoading(false);
+                showError(`Failed to load commodity list: ${error.message}`);
+                console.error('Load error:', error);
+            }
+        }
+
+        async function fetchWithTimeout(url, timeout = 10000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(id);
+                return response;
+            } catch (error) {
+                clearTimeout(id);
+                if (error.name === 'AbortError') {
+                    throw new Error('Request timeout - API took too long to respond');
+                }
+                throw error;
+            }
+        }
+
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                updateDebugPanel();
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        function updateDebugPanel() {
+            const content = document.getElementById('debugContent');
+            
+            if (!debugInfo.lastResponse) {
+                content.innerHTML = '<p>No data fetched yet. Click "Generate Charts" first.</p>';
+                return;
+            }
+            
+            let html = '<h4>Last API Call:</h4>';
+            html += `<p><strong>URL:</strong> ${debugInfo.lastUrl || 'N/A'}</p>`;
+            html += `<p><strong>Records received:</strong> ${debugInfo.recordCount || 0}</p>`;
+            html += `<p><strong>Commodity:</strong> ${debugInfo.commodity || 'N/A'}</p>`;
+            html += `<p><strong>Trader Category:</strong> ${debugInfo.traderCategory || 'N/A'}</p>`;
+            
+            if (debugInfo.sampleRecord) {
+                html += '<h4>Sample Record Fields:</h4><div style="background:#1a252f; padding:10px; border-radius:5px; max-height:300px; overflow-y:auto;">';
+                html += '<pre style="margin:0; font-size:0.8em;">';
+                const fields = Object.keys(debugInfo.sampleRecord).sort();
+                fields.forEach(f => {
+                    const val = debugInfo.sampleRecord[f];
+                    const preview = val !== null ? String(val).substring(0, 50) : 'null';
+                    html += `${f}: ${preview}\n`;
+                });
+                html += '</pre></div>';
+                
+                if (debugInfo.detectedFields) {
+                    html += '<h4>Detected Fields:</h4><ul>';
+                    Object.entries(debugInfo.detectedFields).forEach(([key, value]) => {
+                        html += `<li><strong>${key}:</strong> ${value || 'NOT FOUND'}</li>`;
+                    });
+                    html += '</ul>';
+                }
+            }
+            
+            if (debugInfo.error) {
+                html += `<h4 style="color:#e74c3c;">Error:</h4><p>${debugInfo.error}</p>`;
+            }
+            
+            content.innerHTML = html;
+        }
+
+        async function generateSummary() {
+            const reportType = document.getElementById('reportType').value;
+            
+            showLoading(true);
+            document.getElementById('loadingText').textContent = 'Generating BCOM market summary (fetching full historical data since 2006)...';
+            document.getElementById('summarySection').style.display = 'block';
+            
+            summaryData = [];
+            
+            // Get all BCOM commodities that are available
+            const allBCOMCommodities = [];
+            Object.values(BCOM_COMMODITIES).forEach(sector => {
+                sector.forEach(comm => {
+                    const match = availableCommodities.find(c => 
+                        c && (c.toUpperCase() === comm.cftc_name.toUpperCase() || 
+                              c.toUpperCase().includes(comm.cftc_name.split(' - ')[0].toUpperCase()))
+                    );
+                    if (match) {
+                        allBCOMCommodities.push({ ...comm, api_name: match });
+                    }
+                });
+            });
+            
+            // Fetch ALL historical data (since 2006) for accurate min/max
+            const endDate = new Date();
+            const startDate = new Date('2006-01-01');
+            const startStr = startDate.toISOString().split('T')[0];
+            const endStr = endDate.toISOString().split('T')[0];
+            
+            const endpoint = ENDPOINTS[reportType];
+            
+            // Fetch for all 4 trader categories
+            const categories = ['managed_money', 'swap_dealers', 'prod_merc', 'other_rept'];
+            const categoryNames = {
+                'managed_money': 'Managed Money',
+                'swap_dealers': 'Swap Dealers',
+                'prod_merc': 'Prod/Merch',
+                'other_rept': 'Other Reportables'
+            };
+            
+            for (let i = 0; i < allBCOMCommodities.length; i++) {
+                const commodity = allBCOMCommodities[i];
+                
+                for (let cat of categories) {
+                    document.getElementById('loadingText').textContent = 
+                        `Fetching ${i + 1}/${allBCOMCommodities.length}: ${commodity.name} (${categoryNames[cat]})...`;
+                    
+                    try {
+                        const query = `$where=market_and_exchange_names='${encodeURIComponent(commodity.api_name)}' AND report_date_as_yyyy_mm_dd >= '${startStr}' AND report_date_as_yyyy_mm_dd <= '${endStr}'&$order=report_date_as_yyyy_mm_dd ASC&$limit=10000`;
+                        const url = `${endpoint}?${query}`;
+                        
+                        const response = await fetchWithTimeout(url, 20000);
+                        if (!response.ok) {
+                            console.warn(`Failed to fetch ${commodity.name}: HTTP ${response.status}`);
+                            continue;
+                        }
+                        
+                        const data = await response.json();
+                        if (data.length === 0) {
+                            console.warn(`No data for ${commodity.name}`);
+                            continue;
+                        }
+                        
+                        const processed = processData(data, cat);
+                        if (!processed) {
+                            console.warn(`Failed to process ${commodity.name} for ${cat}`);
+                            continue;
+                        }
+                        
+                        // Calculate historical extremes (full history since 2006)
+                        const lastIdx = processed.net.length - 1;
+                        const prevIdx = Math.max(0, lastIdx - 1);
+                        
+                        // Historical extremes (2006-now)
+                        const netMaxHist = Math.max(...processed.net);
+                        const netMinHist = Math.min(...processed.net);
+                        const longMaxHist = Math.max(...processed.long);
+                        const longMinHist = Math.min(...processed.long);
+                        const shortMaxHist = Math.max(...processed.short);
+                        const shortMinHist = Math.min(...processed.short);
+                        const netPctMaxHist = Math.max(...processed.netPct);
+                        const netPctMinHist = Math.min(...processed.netPct);
+                        
+                        // Current values
+                        const currentNet = processed.net[lastIdx];
+                        const currentLong = processed.long[lastIdx];
+                        const currentShort = processed.short[lastIdx];
+                        const prevNet = processed.net[prevIdx];
+                        
+                        // Weekly changes
+                        const netChange = currentNet - prevNet;
+                        
+                        summaryData.push({
+                            commodity: commodity.name,
+                            ticker: commodity.ticker,
+                            sector: Object.keys(BCOM_COMMODITIES).find(k => BCOM_COMMODITIES[k].some(c => c.name === commodity.name)),
+                            traderCategory: categoryNames[cat],
+                            traderCatKey: cat,
+                            // Net position
+                            netCurrent: currentNet,
+                            netMaxHist: netMaxHist,
+                            netMinHist: netMinHist,
+                            netChange: netChange,
+                            // Long position
+                            longCurrent: currentLong,
+                            longMaxHist: longMaxHist,
+                            longMinHist: longMinHist,
+                            // Short position
+                            shortCurrent: currentShort,
+                            shortMaxHist: shortMaxHist,
+                            shortMinHist: shortMinHist,
+                            // % of OI
+                            netPctCurrent: processed.netPct[lastIdx],
+                            netPctMaxHist: netPctMaxHist,
+                            netPctMinHist: netPctMinHist,
+                            // Traders
+                            tradersTotal: processed.tradersTotal[lastIdx],
+                            tradersLong: processed.tradersLong[lastIdx],
+                            tradersShort: processed.tradersShort[lastIdx],
+                            posPerTraderLong: processed.tradersLong[lastIdx] > 0 ? 
+                                Math.round(processed.long[lastIdx] / processed.tradersLong[lastIdx]) : 0,
+                            posPerTraderShort: processed.tradersShort[lastIdx] > 0 ? 
+                                Math.round(processed.short[lastIdx] / processed.tradersShort[lastIdx]) : 0,
+                            // Metadata
+                            lastDate: processed.dates[lastIdx]
+                        });
+                        
+                    } catch (error) {
+                        console.error(`Error fetching ${commodity.name} for ${cat}:`, error);
+                    }
+                }
+            }
+            
+            renderSummaryTable();
+            showLoading(false);
+        }
+
+        function renderSummaryTable() {
+            const tbody = document.getElementById('summaryTableBody');
+            tbody.innerHTML = '';
+            
+            if (summaryData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center; padding:40px;">No data available. Check console for details.</td></tr>';
+                return;
+            }
+            
+            // Sort by sector then commodity then trader category
+            summaryData.sort((a, b) => {
+                if (a.sector !== b.sector) return a.sector.localeCompare(b.sector);
+                if (a.commodity !== b.commodity) return a.commodity.localeCompare(b.commodity);
+                return a.traderCategory.localeCompare(b.traderCategory);
+            });
+            
+            let currentSector = '';
+            let currentCommodity = '';
+            
+            summaryData.forEach(item => {
+                // Add sector header if changed
+                if (item.sector !== currentSector) {
+                    currentSector = item.sector;
+                    const headerRow = document.createElement('tr');
+                    headerRow.innerHTML = `<td colspan="17" class="section-header">${currentSector}</td>`;
+                    tbody.appendChild(headerRow);
+                }
+                
+                const row = document.createElement('tr');
+                
+                // Helper functions
+                const formatChange = (change) => {
+                    const icon = change > 0 ? '▲' : change < 0 ? '▼' : '→';
+                    const trendClass = change > 0 ? 'trend-up' : change < 0 ? 'trend-down' : 'trend-neutral';
+                    return `<span class="trend-indicator ${trendClass}">${icon} ${Math.abs(change).toLocaleString()}</span>`;
+                };
+                
+                const getExtremeBadge = (current, max, min) => {
+                    const range = max - min;
+                    if (range === 0) return '<span class="extreme-badge extreme-normal">Normal</span>';
+                    const pctFromMax = ((max - current) / range) * 100;
+                    const pctFromMin = ((current - min) / range) * 100;
+                    
+                    if (pctFromMax <= 5) return '<span class="extreme-badge extreme-max">HIST MAX</span>';
+                    if (pctFromMin <= 5) return '<span class="extreme-badge extreme-min">HIST MIN</span>';
+                    return '<span class="extreme-badge extreme-normal">Normal</span>';
+                };
+                
+                const formatValue = (val, isNet = false) => {
+                    const className = isNet ? (val > 0 ? 'positive-value' : val < 0 ? 'negative-value' : '') : '';
+                    return `<span class="${className}">${val.toLocaleString()}</span>`;
+                };
+                
+                const showCommodity = item.commodity !== currentCommodity;
+                currentCommodity = item.commodity;
+                
+                row.innerHTML = `
+                    <td class="commodity-name">${showCommodity ? `${item.commodity} (${item.ticker})` : ''}</td>
+                    <td style="font-weight:600; color:${getTraderColor(item.traderCatKey)}">${item.traderCategory}</td>
+                    
+                    <!-- Net Position -->
+                    <td class="data-cell">${formatValue(item.netCurrent, true)} ${getExtremeBadge(item.netCurrent, item.netMaxHist, item.netMinHist)}</td>
+                    <td class="data-cell">${item.netMaxHist.toLocaleString()}</td>
+                    <td class="data-cell">${item.netMinHist.toLocaleString()}</td>
+                    <td class="data-cell">${formatChange(item.netChange)}</td>
+                    
+                    <!-- Long Position -->
+                    <td class="data-cell">${item.longCurrent.toLocaleString()}</td>
+                    <td class="data-cell">${item.longMaxHist.toLocaleString()}</td>
+                    <td class="data-cell">${item.longMinHist.toLocaleString()}</td>
+                    
+                    <!-- Short Position -->
+                    <td class="data-cell">${item.shortCurrent.toLocaleString()}</td>
+                    <td class="data-cell">${item.shortMaxHist.toLocaleString()}</td>
+                    <td class="data-cell">${item.shortMinHist.toLocaleString()}</td>
+                    
+                    <!-- % of OI -->
+                    <td class="data-cell">${item.netPctCurrent.toFixed(1)}%</td>
+                    <td class="data-cell">${item.netPctMaxHist.toFixed(1)}%</td>
+                    <td class="data-cell">${item.netPctMinHist.toFixed(1)}%</td>
+                    
+                    <!-- Traders -->
+                    <td>${item.tradersTotal.toLocaleString()}<br><small style="color:#6c757d;">${item.tradersLong}L/${item.tradersShort}S</small></td>
+                    <td>${item.posPerTraderLong.toLocaleString()} / ${item.posPerTraderShort.toLocaleString()}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function getTraderColor(cat) {
+            const colors = {
+                'managed_money': '#2a5298',
+                'swap_dealers': '#27ae60',
+                'prod_merc': '#e67e22',
+                'other_rept': '#9b59b6'
+            };
+            return colors[cat] || '#333';
+        }
+
+        function refreshSummary() {
+            generateSummary();
+        }
+
+        async function fetchData() {
+            const commodity = document.getElementById('commoditySelect').value;
+            const reportType = document.getElementById('reportType').value;
+            const years = document.getElementById('yearsSelect').value;
+            const traderCategory = document.getElementById('traderCategory').value;
+            
+            if (!commodity) {
+                showError('Please select a commodity first');
+                return;
+            }
+
+            showLoading(true);
+            hideError();
+            document.getElementById('warning').style.display = 'none';
+            
+            try {
+                // First fetch ALL historical data since 2006 for min/max calculations
+                const endDate = new Date();
+                const startDateHist = new Date('2006-01-01');
+                const startStrHist = startDateHist.toISOString().split('T')[0];
+                const endStr = endDate.toISOString().split('T')[0];
+                
+                const endpoint = ENDPOINTS[reportType];
+                
+                // Fetch historical data for extremes
+                document.getElementById('loadingText').textContent = 'Fetching historical data (2006-now) for min/max calculations...';
+                const histQuery = `$where=market_and_exchange_names='${encodeURIComponent(commodity)}' AND report_date_as_yyyy_mm_dd >= '${startStrHist}' AND report_date_as_yyyy_mm_dd <= '${endStr}'&$order=report_date_as_yyyy_mm_dd ASC&$limit=10000`;
+                const histUrl = `${endpoint}?${histQuery}`;
+                
+                const histResponse = await fetchWithTimeout(histUrl, 30000);
+                if (!histResponse.ok) {
+                    throw new Error(`HTTP ${histResponse.status}: ${histResponse.statusText}`);
+                }
+                
+                const histData = await histResponse.json();
+                const histProcessed = processData(histData, traderCategory);
+                
+                if (histProcessed) {
+                    // Store historical extremes
+                    historicalExtremes = {
+                        net: { min: Math.min(...histProcessed.net), max: Math.max(...histProcessed.net) },
+                        long: { min: Math.min(...histProcessed.long), max: Math.max(...histProcessed.long) },
+                        short: { min: Math.min(...histProcessed.short), max: Math.max(...histProcessed.short) },
+                        netPct: { min: Math.min(...histProcessed.netPct), max: Math.max(...histProcessed.netPct) }
+                    };
+                }
+                
+                // Now fetch data for the selected time range for charts
+                let startDateChart = new Date();
+                if (years !== 'all') {
+                    startDateChart.setFullYear(endDate.getFullYear() - parseInt(years));
+                } else {
+                    startDateChart = new Date('2006-01-01');
+                }
+                const startStrChart = startDateChart.toISOString().split('T')[0];
+                
+                document.getElementById('loadingText').textContent = 'Fetching chart data...';
+                const chartQuery = `$where=market_and_exchange_names='${encodeURIComponent(commodity)}' AND report_date_as_yyyy_mm_dd >= '${startStrChart}' AND report_date_as_yyyy_mm_dd <= '${endStr}'&$order=report_date_as_yyyy_mm_dd ASC&$limit=10000`;
+                const chartUrl = `${endpoint}?${chartQuery}`;
+                
+                debugInfo.lastUrl = chartUrl;
+                debugInfo.commodity = commodity;
+                debugInfo.traderCategory = traderCategory;
+                
+                const response = await fetchWithTimeout(chartUrl, 20000);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                debugInfo.recordCount = data.length;
+                debugInfo.lastResponse = data;
+                
+                if (data.length === 0) {
+                    throw new Error('No data found for selected criteria. Try a different commodity or time range.');
+                }
+                
+                currentData = processData(data, traderCategory);
+                
+                if (!currentData) {
+                    throw new Error('Failed to process data - could not find required fields');
+                }
+                
+                document.getElementById('chart1').style.display = 'block';
+                document.getElementById('chart2').style.display = 'block';
+                document.getElementById('chart3').style.display = 'block';
+                document.getElementById('chart4').style.display = 'block';
+                document.getElementById('statsGrid').style.display = 'grid';
+                
+                updateAllCharts();
+                updateStats();
+                checkDataQuality();
+                
+            } catch (error) {
+                debugInfo.error = error.message;
+                console.error('Fetch error:', error);
+                showError(`Error fetching data: ${error.message}`);
+            } finally {
+                showLoading(false);
+                updateDebugPanel();
+            }
+        }
+
+        function processData(rawData, traderCategory = 'managed_money') {
+            if (!rawData || rawData.length === 0) return null;
+            
+            rawData.sort((a, b) => new Date(a.report_date_as_yyyy_mm_dd) - new Date(b.report_date_as_yyyy_mm_dd));
+            
+            const first = rawData[0];
+            debugInfo.sampleRecord = first;
+            
+            // Get field mappings for selected trader category
+            const fieldMap = TRADER_FIELDS[traderCategory] || TRADER_FIELDS.managed_money;
+            
+            // Comprehensive field detection
+            const fields = detectAllFields(first, fieldMap);
+            debugInfo.detectedFields = fields;
+            
+            console.log('Detected fields for', traderCategory, ':', fields);
+            
+            if (!fields.long || !fields.short) {
+                console.error('Could not find position fields. Available fields:', Object.keys(first));
+                return null;
+            }
+            
+            // Safe parsing
+            const safeParseInt = (val) => {
+                if (val === null || val === undefined || val === '') return 0;
+                const parsed = parseInt(val);
+                return isNaN(parsed) ? 0 : parsed;
+            };
+            
+            const safeParseFloat = (val) => {
+                if (val === null || val === undefined || val === '') return 0;
+                const parsed = parseFloat(val);
+                return isNaN(parsed) ? 0 : parsed;
+            };
+            
+            const processed = {
+                dates: rawData.map(d => d.report_date_as_yyyy_mm_dd),
+                long: rawData.map(d => safeParseInt(d[fields.long])),
+                short: rawData.map(d => safeParseInt(d[fields.short])),
+                spread: fields.spread ? rawData.map(d => safeParseInt(d[fields.spread])) : new Array(rawData.length).fill(0),
+                tradersLong: fields.tradersLong ? rawData.map(d => safeParseInt(d[fields.tradersLong])) : new Array(rawData.length).fill(0),
+                tradersShort: fields.tradersShort ? rawData.map(d => safeParseInt(d[fields.tradersShort])) : new Array(rawData.length).fill(0),
+                tradersTotal: [],
+                oi: fields.oi ? rawData.map(d => safeParseInt(d[fields.oi])) : new Array(rawData.length).fill(0),
+                commodity: first.market_and_exchange_names,
+                fields: fields,
+                traderCategory: traderCategory
+            };
+            
+            // Calculate total traders and derived values
+            processed.tradersTotal = processed.tradersLong.map((l, i) => l + processed.tradersShort[i]);
+            processed.net = processed.long.map((l, i) => l - processed.short[i]);
+            processed.longPct = processed.oi.map((oi, i) => oi > 0 ? (processed.long[i] / oi * 100) : 0);
+            processed.shortPct = processed.oi.map((oi, i) => oi > 0 ? (processed.short[i] / oi * 100) : 0);
+            processed.netPct = processed.longPct.map((l, i) => l - processed.shortPct[i]);
+            
+            // FIXED: Per trader calculations - Gross positions divided by respective trader counts
+            processed.perTraderLong = processed.tradersLong.map((t, i) => t > 0 ? processed.long[i] / t : 0);
+            processed.perTraderShort = processed.tradersShort.map((t, i) => t > 0 ? processed.short[i] / t : 0);
+            
+            return processed;
+        }
+
+        function detectAllFields(record, fieldMap) {
+            const fields = {};
+            const allKeys = Object.keys(record);
+            
+            // Position fields using provided mappings
+            fields.long = findFieldFromMap(record, fieldMap.long);
+            fields.short = findFieldFromMap(record, fieldMap.short);
+            fields.spread = findFieldFromMap(record, fieldMap.spread);
+            
+            // CORRECTED: Trader fields using exact CFTC API field names
+            // Try to find the exact field names first
+            fields.tradersLong = findFieldFromMap(record, fieldMap.traders_long);
+            fields.tradersShort = findFieldFromMap(record, fieldMap.traders_short);
+            
+            // If not found, try searching with pattern matching for CFTC standard names
+            if (!fields.tradersLong) {
+                // Try patterns like traders_m_money_long_all, traders_swap_long_all, etc.
+                const traderCategory = fieldMap === TRADER_FIELDS.managed_money ? 'm_money' :
+                                     fieldMap === TRADER_FIELDS.swap_dealers ? 'swap' :
+                                     fieldMap === TRADER_FIELDS.prod_merc ? 'prod_merc' : 'other_rept';
+                
+                const possibleLongFields = [
+                    `traders_${traderCategory}_long_all`,
+                    `traders_${traderCategory}_long`,
+                    `traders_${traderCategory}_long_old`
+                ];
+                
+                fields.tradersLong = findFieldFromMap(record, possibleLongFields);
+            }
+            
+            if (!fields.tradersShort) {
+                const traderCategory = fieldMap === TRADER_FIELDS.managed_money ? 'm_money' :
+                                     fieldMap === TRADER_FIELDS.swap_dealers ? 'swap' :
+                                     fieldMap === TRADER_FIELDS.prod_merc ? 'prod_merc' : 'other_rept';
+                
+                const possibleShortFields = [
+                    `traders_${traderCategory}_short_all`,
+                    `traders_${traderCategory}_short`,
+                    `traders_${traderCategory}_short_old`
+                ];
+                
+                fields.tradersShort = findFieldFromMap(record, possibleShortFields);
+            }
+            
+            // Open Interest field
+            fields.oi = findField(record, [
+                'open_interest', 'open_interest_all', 'oi', 'total_open_interest'
+            ]);
+            
+            return fields;
+        }
+
+        function findFieldFromMap(record, patterns) {
+            if (!patterns || !Array.isArray(patterns)) return null;
+            for (let pattern of patterns) {
+                if (record.hasOwnProperty(pattern) && record[pattern] !== null && record[pattern] !== undefined) {
+                    return pattern;
+                }
+            }
+            // Try case-insensitive match
+            const keys = Object.keys(record);
+            for (let pattern of patterns) {
+                const lowerPattern = pattern.toLowerCase();
+                const match = keys.find(k => k.toLowerCase() === lowerPattern);
+                if (match) return match;
+            }
+            return null;
+        }
+
+        function findField(record, patterns) {
+            if (!record || typeof record !== 'object') return null;
+            
+            const keys = Object.keys(record);
+            
+            // Exact match first (case-sensitive)
+            for (let pattern of patterns) {
+                if (record.hasOwnProperty(pattern) && record[pattern] !== null && record[pattern] !== undefined) {
+                    const val = record[pattern];
+                    if (typeof val === 'number' || (typeof val === 'string' && val !== '' && !isNaN(parseFloat(val)))) {
+                        return pattern;
+                    }
+                }
+            }
+            
+            // Case-insensitive exact match
+            for (let pattern of patterns) {
+                const lowerPattern = pattern.toLowerCase();
+                const match = keys.find(k => k.toLowerCase() === lowerPattern);
+                if (match && record[match] !== null && record[match] !== undefined) {
+                    return match;
+                }
+            }
+            
+            // Partial match (contains)
+            for (let pattern of patterns) {
+                const lowerPattern = pattern.toLowerCase().replace(/_/g, '');
+                const match = keys.find(k => {
+                    const lowerK = k.toLowerCase().replace(/_/g, '');
+                    return lowerK === lowerPattern || lowerK.includes(lowerPattern);
+                });
+                if (match && record[match] !== null && record[match] !== undefined) {
+                    return match;
+                }
+            }
+            
+            return null;
+        }
+
+        function checkDataQuality() {
+            if (!currentData) return;
+            
+            const warnings = [];
+            
+            const hasPositions = currentData.long.some(v => v !== 0) || currentData.short.some(v => v !== 0);
+            if (!hasPositions) {
+                warnings.push('All position values are zero - API fields may have changed');
+            }
+            
+            const hasTraders = currentData.tradersTotal.some(v => v > 0);
+            if (!hasTraders) {
+                warnings.push('No trader count data available for this commodity/category');
+            }
+            
+            if (warnings.length > 0) {
+                const warningDiv = document.getElementById('warning');
+                warningDiv.innerHTML = '<strong>Data Quality Warnings:</strong><br>' + warnings.join('<br>');
+                warningDiv.style.display = 'block';
+            }
+        }
+
+        function updateAllCharts() {
+            updatePositionChart();
+            updateTraderChart();
+            updateSizeChart();
+            updateSeasonalityChart();
+        }
+
+        function updatePositionChart() {
+            if (!currentData) return;
+            
+            const metric = document.getElementById('positionMetric').value;
+            const ctx = document.getElementById('positionChart').getContext('2d');
+            
+            if (charts.position) charts.position.destroy();
+            
+            let values, label, color, isPercentage = false, showZeroLine = false;
+            
+            switch(metric) {
+                case 'net':
+                    values = currentData.net;
+                    label = 'Net Position (Long - Short)';
+                    color = '#2a5298';
+                    showZeroLine = true;
+                    break;
+                case 'long':
+                    values = currentData.long;
+                    label = 'Long Positions';
+                    color = '#27ae60';
+                    break;
+                case 'short':
+                    values = currentData.short;
+                    label = 'Short Positions';
+                    color = '#e74c3c';
+                    break;
+                case 'spread':
+                    values = currentData.spread;
+                    label = 'Spreading Positions';
+                    color = '#f39c12';
+                    break;
+                case 'net_pct':
+                    values = currentData.netPct;
+                    label = 'Net as % of Open Interest';
+                    color = '#2a5298';
+                    isPercentage = true;
+                    showZeroLine = true;
+                    break;
+                case 'long_pct':
+                    values = currentData.longPct;
+                    label = 'Long as % of Open Interest';
+                    color = '#27ae60';
+                    isPercentage = true;
+                    break;
+                case 'short_pct':
+                    values = currentData.shortPct;
+                    label = 'Short as % of Open Interest';
+                    color = '#e74c3c';
+                    isPercentage = true;
+                    break;
+            }
+            
+            const datasets = [{
+                label: label,
+                data: values,
+                borderColor: color,
+                backgroundColor: color + '20',
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                fill: true,
+                tension: 0.4
+            }];
+            
+            if (showZeroLine) {
+                datasets.push({
+                    label: 'Zero Line',
+                    data: currentData.dates.map(() => 0),
+                    borderColor: 'rgba(231, 76, 60, 0.3)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    fill: false
+                });
+            }
+            
+            charts.position = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: currentData.dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            callbacks: {
+                                label: function(context) {
+                                    const val = isPercentage ? context.parsed.y.toFixed(2) + '%' : context.parsed.y.toLocaleString();
+                                    return context.dataset.label + ': ' + val + (isPercentage ? '' : ' contracts');
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { unit: 'month', displayFormats: { month: 'MMM yyyy' } },
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 12 }
+                        },
+                        y: {
+                            beginAtZero: !showZeroLine,
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            ticks: {
+                                callback: function(value) {
+                                    return isPercentage ? value.toFixed(1) + '%' : value.toLocaleString();
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: isPercentage ? '% of Open Interest' : 'Contracts',
+                                font: { weight: 'bold' }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            document.getElementById('positionLegend').style.display = showZeroLine ? 'flex' : 'none';
+        }
+
+        function updateTraderChart() {
+            if (!currentData) return;
+            
+            const metric = document.getElementById('traderMetric').value;
+            const ctx = document.getElementById('traderChart').getContext('2d');
+            
+            if (charts.trader) charts.trader.destroy();
+            
+            let datasets = [];
+            
+            switch(metric) {
+                case 'total':
+                    datasets = [{
+                        label: 'Total Traders',
+                        data: currentData.tradersTotal,
+                        borderColor: '#2a5298',
+                        backgroundColor: 'rgba(42, 82, 152, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }];
+                    break;
+                case 'long':
+                    datasets = [{
+                        label: 'Long Traders',
+                        data: currentData.tradersLong,
+                        borderColor: '#27ae60',
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }];
+                    break;
+                case 'short':
+                    datasets = [{
+                        label: 'Short Traders',
+                        data: currentData.tradersShort,
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }];
+                    break;
+                case 'both':
+                    datasets = [
+                        {
+                            label: 'Long Traders',
+                            data: currentData.tradersLong,
+                            borderColor: '#27ae60',
+                            backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            fill: false,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Short Traders',
+                            data: currentData.tradersShort,
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            fill: false,
+                            tension: 0.4
+                        }
+                    ];
+                    break;
+            }
+            
+            charts.trader = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: currentData.dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { 
+                            display: metric === 'both',
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { unit: 'month', displayFormats: { month: 'MMM yyyy' } },
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 12 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            title: {
+                                display: true,
+                                text: 'Number of Traders',
+                                font: { weight: 'bold' }
+                            },
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateSizeChart() {
+            if (!currentData) return;
+            
+            const metric = document.getElementById('sizeMetric').value;
+            const ctx = document.getElementById('sizeChart').getContext('2d');
+            
+            if (charts.size) charts.size.destroy();
+            
+            let datasets = [];
+            
+            switch(metric) {
+                case 'per_trader_long':
+                    datasets = [{
+                        label: 'Contracts per Trader (Long)',
+                        data: currentData.perTraderLong,
+                        borderColor: '#27ae60',
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }];
+                    break;
+                case 'per_trader_short':
+                    datasets = [{
+                        label: 'Contracts per Trader (Short)',
+                        data: currentData.perTraderShort,
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }];
+                    break;
+                case 'long_vs_short':
+                    datasets = [
+                        {
+                            label: 'Long per Trader',
+                            data: currentData.perTraderLong,
+                            borderColor: '#27ae60',
+                            backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            fill: false,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Short per Trader',
+                            data: currentData.perTraderShort,
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            fill: false,
+                            tension: 0.4
+                        }
+                    ];
+                    break;
+            }
+            
+            charts.size = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: currentData.dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { 
+                            display: metric === 'long_vs_short',
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + Math.round(context.parsed.y).toLocaleString() + ' contracts';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { unit: 'month', displayFormats: { month: 'MMM yyyy' } },
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 12 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            title: {
+                                display: true,
+                                text: 'Contracts per Trader',
+                                font: { weight: 'bold' }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // CORRECTED: Single seasonality chart with all years as different lines
+        function updateSeasonalityChart() {
+            if (!currentData) return;
+            
+            const metric = document.getElementById('seasonalityMetric').value;
+            const ctx = document.getElementById('seasonalityChart').getContext('2d');
+            
+            // Destroy existing chart
+            if (charts.seasonality) charts.seasonality.destroy();
+            
+            // Get unique years from data
+            const years = [...new Set(currentData.dates.map(d => new Date(d).getFullYear()))].sort();
+            
+            // Select last 8 years for display (to avoid overcrowding)
+            const displayYears = years.slice(-8);
+            
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            // Generate colors for each year (gradient from light to dark)
+            const baseColors = [
+                '#e74c3c', // Red
+                '#e67e22', // Orange
+                '#f39c12', // Yellow
+                '#27ae60', // Green
+                '#2980b9', // Blue
+                '#8e44ad', // Purple
+                '#2c3e50', // Dark Blue
+                '#16a085'  // Teal
+            ];
+            
+            const datasets = displayYears.map((year, index) => {
+                // Filter data for this year
+                const yearData = currentData.dates
+                    .map((date, idx) => ({
+                        date: new Date(date),
+                        value: getMetricValue(metric, idx),
+                        month: new Date(date).getMonth()
+                    }))
+                    .filter(d => d.date.getFullYear() === year);
+                
+                // Aggregate by month (average if multiple data points per month)
+                const monthlyData = new Array(12).fill(null);
+                const monthlyCounts = new Array(12).fill(0);
+                
+                yearData.forEach(d => {
+                    if (monthlyData[d.month] === null) {
+                        monthlyData[d.month] = 0;
+                    }
+                    monthlyData[d.month] += d.value;
+                    monthlyCounts[d.month]++;
+                });
+                
+                // Calculate averages
+                const averagedData = monthlyData.map((sum, month) => 
+                    sum !== null && monthlyCounts[month] > 0 ? sum / monthlyCounts[month] : null
+                );
+                
+                const color = baseColors[index % baseColors.length];
+                
+                return {
+                    label: year.toString(),
+                    data: averagedData,
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    fill: false,
+                    tension: 0.4,
+                    spanGaps: true
+                };
+            });
+            
+            // Create single chart with all years
+            charts.seasonality = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: monthNames,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: `${getMetricLabel(metric)} - Seasonal Patterns by Year`,
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.parsed.y;
+                                    if (val === null) return `${context.dataset.label}: No data`;
+                                    return `${context.dataset.label}: ${metric.includes('pct') ? val.toFixed(2) + '%' : Math.round(val).toLocaleString()}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            title: {
+                                display: true,
+                                text: 'Month',
+                                font: { weight: 'bold' }
+                            }
+                        },
+                        y: {
+                            beginAtZero: !metric.includes('net'),
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            title: {
+                                display: true,
+                                text: getMetricLabel(metric),
+                                font: { weight: 'bold' }
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return metric.includes('pct') ? value.toFixed(0) + '%' : 
+                                           value >= 1000 ? (value/1000).toFixed(1) + 'k' : value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function getMetricLabel(metric) {
+            const labels = {
+                'net': 'Net Position',
+                'long': 'Long Positions',
+                'short': 'Short Positions',
+                'net_pct': 'Net % of OI',
+                'traders_total': 'Total Traders',
+                'per_trader_long': 'Contracts per Trader (Long)',
+                'per_trader_short': 'Contracts per Trader (Short)'
+            };
+            return labels[metric] || metric;
+        }
+
+        function getMetricValue(metric, idx) {
+            switch(metric) {
+                case 'net': return currentData.net[idx];
+                case 'long': return currentData.long[idx];
+                case 'short': return currentData.short[idx];
+                case 'net_pct': return currentData.netPct[idx];
+                case 'traders_total': return currentData.tradersTotal[idx];
+                case 'per_trader_long': return currentData.perTraderLong[idx];
+                case 'per_trader_short': return currentData.perTraderShort[idx];
+                default: return 0;
+            }
+        }
+
+        function updateStats() {
+            if (!currentData) return;
+            
+            const idx = currentData.net.length - 1;
+            const prevIdx = Math.max(0, idx - 1);
+            
+            const net = currentData.net[idx];
+            const long = currentData.long[idx];
+            const short = currentData.short[idx];
+            const oi = currentData.oi[idx];
+            const tradersTotal = currentData.tradersTotal[idx];
+            const tradersLong = currentData.tradersLong[idx];
+            const tradersShort = currentData.tradersShort[idx];
+            
+            const prevNet = currentData.net[prevIdx];
+            const change = net - prevNet;
+            
+            // Update basic stats with null checks
+            const currentNetEl = document.getElementById('currentNet');
+            if (currentNetEl) {
+                currentNetEl.textContent = net.toLocaleString();
+                currentNetEl.className = 'stat-value ' + (net > 0 ? 'positive' : net < 0 ? 'negative' : '');
+            }
+            
+            const currentNetPctEl = document.getElementById('currentNetPct');
+            if (currentNetPctEl) {
+                currentNetPctEl.textContent = `(${currentData.netPct[idx].toFixed(1)}% of OI)`;
+            }
+            
+            const currentLongEl = document.getElementById('currentLong');
+            if (currentLongEl) {
+                currentLongEl.textContent = long.toLocaleString();
+            }
+            
+            const currentLongPctEl = document.getElementById('currentLongPct');
+            if (currentLongPctEl) {
+                currentLongPctEl.textContent = `${currentData.longPct[idx].toFixed(1)}% of OI`;
+            }
+            
+            const currentShortEl = document.getElementById('currentShort');
+            if (currentShortEl) {
+                currentShortEl.textContent = short.toLocaleString();
+            }
+            
+            const currentShortPctEl = document.getElementById('currentShortPct');
+            if (currentShortPctEl) {
+                currentShortPctEl.textContent = `${currentData.shortPct[idx].toFixed(1)}% of OI`;
+            }
+            
+            const numTradersEl = document.getElementById('numTraders');
+            if (numTradersEl) {
+                numTradersEl.textContent = tradersTotal.toLocaleString();
+            }
+            
+            const tradersLongEl = document.getElementById('tradersLong');
+            if (tradersLongEl) {
+                tradersLongEl.textContent = tradersLong;
+            }
+            
+            const tradersShortEl = document.getElementById('tradersShort');
+            if (tradersShortEl) {
+                tradersShortEl.textContent = tradersShort;
+            }
+            
+            // FIXED: Per trader calculations using gross positions divided by respective trader counts
+            const perTraderLong = tradersLong > 0 ? Math.round(long / tradersLong) : 0;
+            const perTraderShort = tradersShort > 0 ? Math.round(short / tradersShort) : 0;
+            
+            const posPerTraderLongEl = document.getElementById('posPerTraderLong');
+            if (posPerTraderLongEl) {
+                posPerTraderLongEl.textContent = perTraderLong.toLocaleString();
+            }
+            
+            const posPerTraderShortEl = document.getElementById('posPerTraderShort');
+            if (posPerTraderShortEl) {
+                posPerTraderShortEl.textContent = perTraderShort.toLocaleString();
+            }
+            
+            const openInterestEl = document.getElementById('openInterest');
+            if (openInterestEl) {
+                openInterestEl.textContent = oi ? oi.toLocaleString() : 'N/A';
+            }
+            
+            // 52-week range - with null check
+            const recentNets = currentData.net.slice(-52);
+            const high52 = Math.max(...recentNets);
+            const low52 = Math.min(...recentNets);
+            
+            // Create 52-week range element if it doesn't exist, or update if it does
+            let week52RangeEl = document.getElementById('week52Range');
+            if (!week52RangeEl) {
+                // Add a new stat card for 52-week range if element doesn't exist
+                const statsGrid = document.getElementById('statsGrid');
+                if (statsGrid) {
+                    const newCard = document.createElement('div');
+                    newCard.className = 'stat-card';
+                    newCard.innerHTML = `
+                        <div class="stat-label">52-Week Range</div>
+                        <div class="stat-value" id="week52Range">--</div>
+                        <div class="stat-sub">Net position min/max</div>
+                    `;
+                    statsGrid.appendChild(newCard);
+                    week52RangeEl = document.getElementById('week52Range');
+                }
+            }
+            if (week52RangeEl) {
+                week52RangeEl.textContent = `${low52.toLocaleString()} / ${high52.toLocaleString()}`;
+            }
+            
+            const weeklyChangeEl = document.getElementById('weeklyChange');
+            if (weeklyChangeEl) {
+                weeklyChangeEl.textContent = (change > 0 ? '+' : '') + change.toLocaleString();
+                weeklyChangeEl.className = 'stat-value ' + (change > 0 ? 'positive' : change < 0 ? 'negative' : '');
+            }
+            
+            const weeklyChangePctEl = document.getElementById('weeklyChangePct');
+            if (weeklyChangePctEl) {
+                weeklyChangePctEl.textContent = 'contracts';
+            }
+            
+            // Update visual range bar for net position
+            updateRangeBar(net, historicalExtremes.net?.min, historicalExtremes.net?.max, net > 0);
+        }
+
+        function updateRangeBar(current, min, max, isLong) {
+            const container = document.getElementById('netRangeBar');
+            const labels = document.getElementById('netRangeLabels');
+            
+            if (!container || !labels || min === undefined || max === undefined || min === max) {
+                if (container) container.style.display = 'none';
+                if (labels) labels.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            labels.style.display = 'flex';
+            
+            const bar = container.querySelector('.range-bar');
+            const marker = container.querySelector('.range-marker');
+            const minLabel = document.getElementById('netMinLabel');
+            const maxLabel = document.getElementById('netMaxLabel');
+            
+            // Calculate percentage position (0-100%)
+            const range = max - min;
+            const pct = ((current - min) / range) * 100;
+            
+            // Update bar color based on net position
+            bar.className = 'range-bar ' + (isLong ? 'range-bar-net-long' : 'range-bar-net-short');
+            
+            // Update marker position
+            marker.style.left = `${Math.max(0, Math.min(100, pct))}%`;
+            
+            // Update labels
+            if (minLabel) minLabel.textContent = min.toLocaleString();
+            if (maxLabel) maxLabel.textContent = max.toLocaleString();
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('fetchBtn').disabled = show;
+            document.getElementById('summaryBtn').disabled = show;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => errorDiv.style.display = 'none', 15000);
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
